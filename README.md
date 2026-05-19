@@ -1,6 +1,6 @@
 # GulfCoast Labs
 
-Lightweight premium portfolio and studio site for GulfCoast Labs.
+Premium operator studio site for GulfCoast Labs.
 
 ## Stack
 
@@ -8,6 +8,7 @@ Lightweight premium portfolio and studio site for GulfCoast Labs.
 - React
 - Tailwind CSS v4
 - React Router
+- Vercel-friendly serverless contact endpoint
 - No TypeScript
 - No Docker
 - No Playwright
@@ -16,6 +17,7 @@ Lightweight premium portfolio and studio site for GulfCoast Labs.
 
 - `/`
 - `/work`
+- `/work/:slug`
 - `/services`
 - `/labs`
 - `/contact`
@@ -33,9 +35,20 @@ npm run dev
 npm run build
 ```
 
-## Notes
+## Contact Backend
+
+The contact form posts to `/api/contact` first.
+
+Email delivery is configured through Vercel environment variables:
+
+- `RESEND_API_KEY`
+- `CONTACT_FROM_EMAIL`
+- `CONTACT_TO_EMAIL`
+
+If the endpoint is unavailable, the form falls back to `localStorage` so inquiries are preserved during development.
+
+## Ownership Notes
 
 - GulfCoast Labs is the operator brand.
 - ZeroChill Co. is client work for Danny Ford.
 - Vestra Intel and Lifepvth are owned brands/projects.
-- Contact form storage uses localStorage only for now.

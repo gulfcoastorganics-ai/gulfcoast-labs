@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY = "gulfcoast-labs-contact";
+const CONTACT_ENDPOINT = "/api/contact";
 
 const initialState = {
   name: "",
@@ -10,10 +11,28 @@ const initialState = {
   notes: "",
 };
 
+function safeSave(entry) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entry));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function ContactForm() {
   const [form, setForm] = useState(initialState);
   const [status, setStatus] = useState("");
   const [saved, setSaved] = useState(null);
+  const [mode, setMode] = useState("checking");
+
+  const payload = useMemo(
+    () => ({
+      ...form,
+      source: "gulfcoast-labs-site",
+    }),
+    [form],
+  );
 
   useEffect(() => {
     try {
@@ -22,6 +41,10 @@ export default function ContactForm() {
     } catch {
       setSaved(null);
     }
+
+    if (typeof window !== "undefined") {
+      setMode(window.location.hostname.includes("localhost") || window.location.hostname === "127.0.0.1" ? "local fallback ready" : "api endpoint ready");
+    }
   }, []);
 
   function updateField(event) {
@@ -29,35 +52,69 @@ export default function ContactForm() {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
-  function handleSubmit(event) {
+  async function submitToApi(entry) {
+    const response = await fetch(CONTACT_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(entry),
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(result?.error || "Contact endpoint unavailable");
+    }
+
+    return result;
+  }
+
+  async function handleSubmit(event) {
     event.preventDefault();
 
     const entry = {
-      ...form,
+      ...payload,
       createdAt: new Date().toISOString(),
     };
 
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entry));
-      setSaved(entry);
-      setStatus("Saved locally. You can connect this to email or CRM later.");
+      const result = await submitToApi(entry);
+      setStatus(result?.message || "Inquiry sent. Email notification queued.");
+      safeSave({ ...entry, transport: "api" });
+      setSaved({ ...entry, transport: "api" });
       setForm(initialState);
+      setMode("api connected");
+      return;
     } catch {
-      setStatus("Local storage is unavailable in this browser context.");
+      const stored = safeSave({ ...entry, transport: "localStorage" });
+      setSaved({ ...entry, transport: "localStorage" });
+      setStatus(
+        stored
+          ? "Saved locally. API unavailable, so the inquiry is preserved in localStorage."
+          : "API unavailable and localStorage could not be used in this browser.",
+      );
+      setForm(initialState);
+      setMode("local fallback active");
     }
   }
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr]">
       <form onSubmit={handleSubmit} className="glass-panel space-y-4 p-6">
+        <div className="contact-status">
+          <span className="contact-status-dot" />
+          <span>{mode}</span>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="field-label">
             Name
-            <input name="name" value={form.name} onChange={updateField} className="field-input" />
+            <input name="name" value={form.name} onChange={updateField} className="field-input" autoComplete="name" />
           </label>
           <label className="field-label">
             Email
-            <input name="email" type="email" value={form.email} onChange={updateField} className="field-input" />
+            <input name="email" type="email" value={form.email} onChange={updateField} className="field-input" autoComplete="email" />
           </label>
         </div>
 
@@ -76,18 +133,21 @@ export default function ContactForm() {
           <textarea name="notes" value={form.notes} onChange={updateField} className="field-input min-h-36" placeholder="What do you need built?" />
         </label>
 
-        <button type="submit" className="btn-primary">
-          Save inquiry locally
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="submit" className="btn-primary">
+            Send inquiry
+          </button>
+          <span className="text-sm text-slate-400">API first, local fallback second.</span>
+        </div>
 
-        {status ? <p className="text-sm text-slate-300">{status}</p> : null}
+        {status ? <p className="text-sm leading-7 text-slate-300">{status}</p> : null}
       </form>
 
       <aside className="space-y-4">
         <div className="glass-panel p-6">
-          <p className="section-eyebrow">What happens next</p>
+          <p className="section-eyebrow">Contact backend</p>
           <p className="mt-3 text-sm leading-7 text-slate-300">
-            For now, submissions are stored in localStorage only. That keeps the contact flow lightweight until a mail or CRM integration is added.
+            The frontend posts to <span className="text-white">{CONTACT_ENDPOINT}</span>. On Vercel, that endpoint can send email notifications when the environment variables are configured.
           </p>
         </div>
 
