@@ -153,3 +153,5 @@ export default async function handler(req, res) {
     if (timeout) clearTimeout(timeout);
   }
 }
+
+export { clean, escapeHtml };
